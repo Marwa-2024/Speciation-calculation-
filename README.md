@@ -19,8 +19,9 @@ balance — no surface complexation model is fitted or assumed.
 Open [colab.research.google.com](https://colab.research.google.com), choose **File ▸ Upload
 notebook**, pick `DolomiteSurfaceTitration.ipynb`, then **Runtime ▸ Run all**. Every
 library it uses (numpy, scipy, matplotlib, pandas) ships with Colab, so there is nothing
-to install. The Python notebook and the Mathematica notebook implement the same method and
-give the same results.
+to install. The Python notebook carries the current method (corrected charge coefficients and
+the proton mass balance surface charge); the Mathematica files still hold the earlier
+charge-balance version and have not yet been updated to match.
 
 ## What is calculated
 
@@ -45,17 +46,29 @@ which the reactive charge balance closes:
 
 ```
 pos = H⁺ + 2·Ca²⁺ + 2·Mg²⁺ + CaHCO₃⁺ + CaOH⁺ + MgHCO₃⁺ + MgOH⁺
-neg = OH⁻ + HCO₃⁻ + 2·CO₃²⁻ + 2·NaCO₃⁻ + NaHCO₃
+neg = OH⁻ + HCO₃⁻ + 2·CO₃²⁻ + NaCO₃⁻
 ```
 
 The background electrolyte (free Na⁺, Cl⁻) is deliberately left out of `pos`/`neg`;
-its imbalance is what the mineral surface carries.
+its imbalance is what the mineral surface carries. NaCO₃⁻ carries a single negative
+charge and NaHCO₃(aq) is neutral, so it drops out of the sum. Every pH is calculated;
+the electrode reading is kept only for comparison.
 
-**Surface charge.** `σ = pos − neg`. It is zero at the calculated pH (no surface
-interaction) and becomes negative or positive when the real, measured pH lies
-above or below that value. The notebook plots σ(pH) for vessels A and C and the
-per-sample surface charge at the measured pH, normalised per gram of dolomite
-(6 g of solid; 100 mL in A, 200 mL in C).
+**Surface charge (proton mass balance).** The calculated pH is fixed by the charge
+balance above, so that same sum is zero for every solution and cannot itself be the
+surface charge. Instead the surface charge is the net proton exchange between the
+conservative A+B mixture and the reacted suspension C:
+
+```
+σ_H = ( TOTH_mix − TOTH_C ) / St ,     TOTH_mix = ( TOTH_A + TOTH_B ) / 2
+```
+
+`TOTH` is the total proton excess of a solution relative to the reference components
+(H₂O, CO₃²⁻, Ca²⁺, Mg²⁺, Na⁺, Cl⁻). The fixed-pCO₂ term is identical in every solution
+and cancels in the difference, so the open CO₂ reservoir contributes nothing to the
+surface charge. `St` is the surface area per litre of vessel C (specific area × loading,
+0.84 m²/g × 30 g/L = 25.2 m²/L). The notebook reports σ_H per m² and plots it against
+the calculated pH of vessel C: positive as pH drops, negative at high pH.
 
 ## Vessels
 
@@ -74,5 +87,10 @@ per-sample surface charge at the measured pH, normalised per gram of dolomite
 2. `pCO2` is a single parameter near the top of the notebook (default 10^(−3.5)
    atm). To use the measured alkalinity instead, replace the carbonate lines in
    `allSpecies` with a carbonate mass balance.
-3. No surface complexation constants are used — the surface charge is purely a
-   charge-balance quantity.
+3. No surface complexation constants are used — the surface charge is a proton
+   mass balance derived from the measured cations and the aqueous speciation only.
+4. Forcing an open system together with a calculated pH detaches the model pH from
+   the electrode (large dissolved Ca/Mg in equilibrium with atmospheric CO₂ must be
+   alkaline), so the calculated pH is an internal reference rather than a prediction
+   of the measured value. Runs 1–4 show strong dissolution and their σ_H is dominated
+   by carbonate released into solution, not by simple surface protonation.
