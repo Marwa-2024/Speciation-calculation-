@@ -10,8 +10,17 @@ balance — no surface complexation model is fitted or assumed.
 
 | File | Purpose |
 |------|---------|
+| `DolomiteSurfaceTitration.ipynb` | Google Colab / Jupyter notebook (Python). Open in Colab and run all. |
 | `DolomiteSurfaceTitration.nb` | The notebook to open in Mathematica. |
-| `DolomiteSurfaceTitration.wl` | The same code as a plain package/script. |
+| `DolomiteSurfaceTitration.wl` | The same Mathematica code as a plain package/script. |
+
+### Running in Google Colab
+
+Open [colab.research.google.com](https://colab.research.google.com), choose **File ▸ Upload
+notebook**, pick `DolomiteSurfaceTitration.ipynb`, then **Runtime ▸ Run all**. Every
+library it uses (numpy, scipy, matplotlib, pandas) ships with Colab, so there is nothing
+to install. The Python notebook and the Mathematica notebook implement the same method and
+give the same results.
 
 ## What is calculated
 
