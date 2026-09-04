@@ -47,12 +47,20 @@ which the reactive charge balance closes:
 ```
 pos = H⁺ + 2·Ca²⁺ + 2·Mg²⁺ + CaHCO₃⁺ + CaOH⁺ + MgHCO₃⁺ + MgOH⁺
 neg = OH⁻ + HCO₃⁻ + 2·CO₃²⁻ + NaCO₃⁻
+pos − neg = net_acid           (net_acid = C_HCl − C_NaOH)
 ```
 
 The background electrolyte (free Na⁺, Cl⁻) is deliberately left out of `pos`/`neg`;
 its imbalance is what the mineral surface carries. NaCO₃⁻ carries a single negative
 charge and NaHCO₃(aq) is neutral, so it drops out of the sum. Every pH is calculated;
 the electrode reading is kept only for comparison.
+
+**Titrant carried explicitly.** Vessel B is a bare NaCl blank whose pH is set entirely
+by the HCl or NaOH used to preset it. That dose is tiny next to the analytical Na/Cl,
+so it must enter the balance as its own proton source — otherwise every B run collapses
+to the same neutral pH. The added strong acid/base per run (runs 1–4 HCl, run 5 none,
+runs 6–9 NaOH, in cumulative 0.001 mol/L steps) is listed in the notebook as `net_acid_B`,
+and the calculated pH is found where `pos − neg = net_acid`.
 
 **Surface charge (proton mass balance).** The calculated pH is fixed by the charge
 balance above, so that same sum is zero for every solution and cannot itself be the
