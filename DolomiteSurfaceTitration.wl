@@ -3,373 +3,200 @@
 (* ==================================================================== *)
 (*  Dolomite surface titration in NaCl  (after Pokrovsky et al., 1999)  *)
 (*                                                                      *)
-(*  What this notebook does                                             *)
-(*   - Writes the law of mass action for every aqueous complex.         *)
-(*   - Uses the free ion concentrations as the unknowns                 *)
-(*        ( H+, Ca2+, Mg2+, Na+, Cl- ; carbonate set by a fixed pCO2 ). *)
-(*   - Solves the mass balances for Ca, Mg, Na, Cl.                     *)
-(*   - Calculates pH from the charge balance (it is NOT read from the   *)
-(*        measured pH); pCO2 is held fixed.                             *)
-(*   - Lists the full speciation for vessels A, B and C.                *)
-(*   - Computes the surface charge directly from the charge balance     *)
-(*        ( no surface complexation model ) and plots it against pH.    *)
+(*  Net surface charge from the charge-sum difference of Charlet et al. *)
+(*  (1990), Pokrovsky Eqn 1:                                            *)
+(*     sigmaT = (1/S) ( Sum_k z_k [k]_0  -  Sum_k z_k [k]_f )           *)
+(*  [k]_0 : conservative 1:1 mix of reactors A and B (zero-charge ref)  *)
+(*  [k]_f : reactor C, computed from the MEASURED pH, alkalinity, Ca,Mg *)
+(*  S     : dolomite surface area per litre of reactor C                *)
+(*                                                                      *)
+(*  No surface complexation model is fitted. Davies activity coeffs and *)
+(*  Plummer-Busenberg / Nordstrom formation constants, as in the paper. *)
+(*  Solved step by step: gammas -> mass action (gamma substitution) ->  *)
+(*  free ions from the mass balances -> charge balance -> surface charge*)
+(*                                                                      *)
+(*  NOTE: this file mirrors the Python (Colab) notebook, which is the   *)
+(*  executed and verified reference.                                    *)
 (* ==================================================================== *)
 
 ClearAll["Global`*"];
 
 (* -------------------------------------------------------------------- *)
-(*  1.  Molar masses (g/mol) and a ppm (mg/L) -> mol/L converter        *)
+(*  1.  Constants and thermodynamic data                                *)
 (* -------------------------------------------------------------------- *)
-mmNa = 22.990;  mmCl = 35.453;  mmCa = 40.078;  mmMg = 24.305;
+ADavies = 0.509;            (* Davies equation constant                 *)
+KW      = 1.0*^-14;         (* water dissociation, [H+][OH-]            *)
+logKH   = -1.47;            (* CO2(g) = CO2(aq): [CO2aq] = 10^logKH pCO2 *)
+pCO2atm = 10^-3.5;          (* atmospheric CO2 partial pressure (atm)   *)
 
-ppmToM[ppm_, mm_] := ppm/1000./mm;      (* mg/L divided by g/mol -> mol/L *)
+(* formation constants (log10 K), complex on the RIGHT of the reaction  *)
+logKa2    = -10.329;   (* HCO3-         = H+ + CO3^2-   *)
+logKco2   =  -6.35;    (* CO2(aq) + H2O = H+ + HCO3-    *)
+logKCaCO3 =   3.224;   (* Ca2+ + CO3^2- = CaCO3(aq)     *)
+logKCaHCO3=   1.106;   (* Ca2+ + HCO3-  = CaHCO3+       *)
+logKCaOH  = -12.78;    (* Ca2+ + H2O    = CaOH+ + H+    *)
+logKMgCO3 =   2.98;    (* Mg2+ + CO3^2- = MgCO3(aq)     *)
+logKMgHCO3=   1.07;    (* Mg2+ + HCO3-  = MgHCO3+       *)
+logKMgOH  = -11.44;    (* Mg2+ + H2O    = MgOH+ + H+    *)
+logKNaCO3 =   1.27;    (* Na+  + CO3^2- = NaCO3-        *)
+logKNaHCO3=  -0.25;    (* Na+  + HCO3-  = NaHCO3(aq)    *)
 
-(* -------------------------------------------------------------------- *)
-(*  2.  Equilibrium constants at 25 C  (log10 K)                        *)
-(*      Reactions are written exactly as in the TOUGHREACT / EQ3-6      *)
-(*      database supplied (complex on the left, basis species on the    *)
-(*      right).  The number is log K of that dissociation.              *)
-(* -------------------------------------------------------------------- *)
+(* molar masses (g/mol) *)
+mmCa = 40.078; mmMg = 24.305; mmCO3 = 60.008; mmHCO3 = 61.016; mmNa = 22.99; mmCl = 35.45;
 
-(* Carbonate system -- open system, pCO2 fixed                          *)
-logKH = -1.468;    (* CO2(g)  = CO2(aq)      : [CO2aq] = 10^logKH * pCO2 *)
-logK1 = -6.345;    (* CO2(aq) + H2O = H+ + HCO3-                          *)
-logK2 = -10.329;   (* HCO3-        = H+ + CO3^2-                          *)
-logKw = -13.995;   (* H2O          = H+ + OH-                             *)
+(* surface area of dolomite per litre of reactor C  (S in Eqn 1) *)
+ssa     = 0.84;            (* specific surface area, m2/g              *)
+loading = 30.0;            (* 6 g of solid in 0.2 L of reactor C       *)
+St      = ssa*loading;     (* = 25.2 m2 / L                            *)
 
-(* Metal - ligand complexes ( log K of the dissociation as written )    *)
-logKCaCl   =  0.696;   (* CaCl+    = Ca2+ + Cl-        *)
-logKCaCO3  =  7.002;   (* CaCO3(aq)= Ca2+ + HCO3- - H+ *)
-logKCaHCO3 = -1.047;   (* CaHCO3+  = Ca2+ + HCO3-      *)
-logKCaOH   = 12.850;   (* CaOH+    = Ca2+ + H2O - H+   *)
-
-logKMgCl   =  0.135;   (* MgCl+    = Mg2+ + Cl-        *)
-logKMgCO3  =  7.350;   (* MgCO3(aq)= Mg2+ + HCO3- - H+ *)
-logKMgHCO3 = -1.036;   (* MgHCO3+  = Mg2+ + HCO3-      *)
-logKMgOH   = 11.785;   (* MgOH+    = Mg2+ + H2O - H+   *)
-
-logKNaCO3  =  9.815;   (* NaCO3-    = Na+ + HCO3- - H+ *)
-logKNaHCO3 = -0.154;   (* NaHCO3(aq)= Na+ + HCO3-      *)
-logKNaCl   =  0.777;   (* NaCl(aq)  = Na+ + Cl-        *)
-logKNaOH   = 14.180;   (* NaOH(aq)  = Na+ + H2O - H+   *)
+carbonate    = "closed";   (* "closed" = measured alkalinity (Pokrovsky) ; "open" = fixed pCO2 *)
+siteCeiling  = 0.0166;     (* site-density ceiling, mmol/m2 (~10 sites/nm2) *)
 
 (* -------------------------------------------------------------------- *)
-(*  3.  Law of mass action for every species                            *)
-(*      Given the free ion concentrations h, cCa, cMg, cNa, cCl and a   *)
-(*      fixed pCO2, each concentration below follows from its K.        *)
-(*      Water activity is taken as 1 (concentration basis, no activity  *)
-(*      coefficients -- see the note at the end).                       *)
+(*  2.  Step 1 -- Davies activity coefficients                          *)
+(*      log gamma_z = -A z^2 ( sqrt I /(1+ sqrt I) - 0.3 I )            *)
 (* -------------------------------------------------------------------- *)
-
-(* the pCO2 argument is called pc_ so the definition never clashes with the
-   global pCO2 value set further down (a symbol that already holds a value
-   cannot be used as a pattern name). *)
-allSpecies[h_?NumericQ, cCa_?NumericQ, cMg_?NumericQ, cNa_?NumericQ,
-           cCl_?NumericQ, pc_?NumericQ] :=
- Module[{co2, hco3, co3, oh},
-  (* carbonate fixed by pCO2 and h *)
-  co2  = 10^logKH * pc;
-  hco3 = 10^logK1 * co2 / h;      (* CO2 + H2O = H+ + HCO3-  *)
-  co3  = 10^logK2 * hco3 / h;     (* HCO3-     = H+ + CO3^2- *)
-  oh   = 10^logKw / h;            (* H2O       = H+ + OH-    *)
-  <|
-   "H"      -> h,
-   "OH"     -> oh,
-   "CO2"    -> co2,
-   "HCO3"   -> hco3,
-   "CO3"    -> co3,
-   (* calcium *)
-   "Ca"     -> cCa,
-   "CaCl"   -> cCa cCl / 10^logKCaCl,
-   "CaCO3"  -> cCa hco3 / (h 10^logKCaCO3),
-   "CaHCO3" -> cCa hco3 / 10^logKCaHCO3,
-   "CaOH"   -> cCa / (h 10^logKCaOH),
-   (* magnesium *)
-   "Mg"     -> cMg,
-   "MgCl"   -> cMg cCl / 10^logKMgCl,
-   "MgCO3"  -> cMg hco3 / (h 10^logKMgCO3),
-   "MgHCO3" -> cMg hco3 / 10^logKMgHCO3,
-   "MgOH"   -> cMg / (h 10^logKMgOH),
-   (* sodium *)
-   "Na"     -> cNa,
-   "NaCO3"  -> cNa hco3 / (h 10^logKNaCO3),
-   "NaHCO3" -> cNa hco3 / 10^logKNaHCO3,
-   "NaCl"   -> cNa cCl / 10^logKNaCl,
-   "NaOH"   -> cNa / (h 10^logKNaOH),
-   (* chloride *)
-   "Cl"     -> cCl
-  |>
- ];
-
-(* Analytical totals implied by a set of free concentrations *)
-totCa[h_, cCa_, cMg_, cNa_, cCl_, p_] := With[{s = allSpecies[h, cCa, cMg, cNa, cCl, p]},
-   s["Ca"] + s["CaCl"] + s["CaCO3"] + s["CaHCO3"] + s["CaOH"]];
-totMg[h_, cCa_, cMg_, cNa_, cCl_, p_] := With[{s = allSpecies[h, cCa, cMg, cNa, cCl, p]},
-   s["Mg"] + s["MgCl"] + s["MgCO3"] + s["MgHCO3"] + s["MgOH"]];
-totNa[h_, cCa_, cMg_, cNa_, cCl_, p_] := With[{s = allSpecies[h, cCa, cMg, cNa, cCl, p]},
-   s["Na"] + s["NaCO3"] + s["NaHCO3"] + s["NaCl"] + s["NaOH"]];
-totCl[h_, cCa_, cMg_, cNa_, cCl_, p_] := With[{s = allSpecies[h, cCa, cMg, cNa, cCl, p]},
-   s["Cl"] + s["CaCl"] + s["MgCl"] + s["NaCl"]];
+gammas[ii_?NumericQ] := If[ii <= 0, {1.0, 1.0},
+  Module[{f = -ADavies (Sqrt[ii]/(1 + Sqrt[ii]) - 0.3 ii)},
+   {10^f, 10^(4 f)}]];       (* {gamma1 (z=1), gamma2 (z=2)} *)
 
 (* -------------------------------------------------------------------- *)
-(*  4.  Speciation solver.                                              *)
-(*      For a given pH and pCO2, solve the four mass balances for the   *)
-(*      free ion concentrations, then return every species.            *)
+(*  3.  Steps 2-3 -- mass action (gamma substituted) and free ions      *)
+(*      For a MEASURED pH, build every species from the free carbonate  *)
+(*      cCO3 and the mass-balance denominators, iterating on I.         *)
+(*      "open"  : CO2(aq) fixed by pCO2, cCO3 follows from pH.           *)
+(*      "closed": cCO3 scaled until total inorganic carbon = DIC.        *)
 (* -------------------------------------------------------------------- *)
+buildFromCO3[cCO3_, aH_, g1_, g2_, CaT_, MgT_, NaT_, ClT_] :=
+ Module[{aCO3, aHCO3, cHCO3, cCO2, dCa, dMg, dNa, cCa, cMg, cNa,
+         CaCO3, CaHCO3, MgCO3, MgHCO3, NaCO3, NaHCO3, CaOH, MgOH, DICc, cH},
+  cH    = aH/g1;
+  aCO3  = g2 cCO3;
+  aHCO3 = aCO3 aH/10^logKa2;
+  cHCO3 = aHCO3/g1;
+  cCO2  = aHCO3 aH/10^logKco2;
+  (* free metals from the mass-balance denominators *)
+  dCa = 1 + 10^logKCaCO3 g2 g2 cCO3 + 10^logKCaHCO3 g2 cHCO3 + 10^logKCaOH g2/(aH g1);
+  dMg = 1 + 10^logKMgCO3 g2 g2 cCO3 + 10^logKMgHCO3 g2 cHCO3 + 10^logKMgOH g2/(aH g1);
+  dNa = 1 + 10^logKNaCO3 g2 cCO3 + 10^logKNaHCO3 g1 g1 cHCO3;
+  cCa = CaT/dCa; cMg = MgT/dMg; cNa = NaT/dNa;
+  (* rebuild every complex from the free ions *)
+  CaCO3  = 10^logKCaCO3  g2 g2 cCa cCO3;
+  CaHCO3 = 10^logKCaHCO3 g2 cCa cHCO3;
+  MgCO3  = 10^logKMgCO3  g2 g2 cMg cCO3;
+  MgHCO3 = 10^logKMgHCO3 g2 cMg cHCO3;
+  NaCO3  = 10^logKNaCO3  g2 cNa cCO3;
+  NaHCO3 = 10^logKNaHCO3 g1 g1 cNa cHCO3;
+  CaOH   = 10^logKCaOH g2 cCa/(aH g1);
+  MgOH   = 10^logKMgOH g2 cMg/(aH g1);
+  DICc   = cCO3 + cHCO3 + cCO2 + CaCO3 + CaHCO3 + MgCO3 + MgHCO3 + NaCO3 + NaHCO3;
+  <|"H" -> cH, "HCO3" -> cHCO3, "CO2" -> cCO2, "Ca" -> cCa, "Mg" -> cMg, "Na" -> cNa,
+    "CaCO3" -> CaCO3, "CaHCO3" -> CaHCO3, "MgCO3" -> MgCO3, "MgHCO3" -> MgHCO3,
+    "NaCO3" -> NaCO3, "NaHCO3" -> NaHCO3, "CaOH" -> CaOH, "MgOH" -> MgOH, "DICc" -> DICc|>];
 
-solveSpeciation[caT_, mgT_, naT_, clT_, pH_, pc_] :=
- Module[{h = 10.^(-pH), cCa, cMg, cNa, cCl, sol},
-  sol = FindRoot[
-    {
-     totCa[h, cCa, cMg, cNa, cCl, pc] == caT,
-     totMg[h, cCa, cMg, cNa, cCl, pc] == mgT,
-     totNa[h, cCa, cMg, cNa, cCl, pc] == naT,
-     totCl[h, cCa, cMg, cNa, cCl, pc] == clT
-    },
-    {
-     {cCa, Max[caT, 1.*^-12]},
-     {cMg, Max[mgT, 1.*^-12]},
-     {cNa, Max[naT, 1.*^-12]},
-     {cCl, Max[clT, 1.*^-12]}
-    },
-    MaxIterations -> 500];
-  allSpecies[h, cCa /. sol, cMg /. sol, cNa /. sol, cCl /. sol, pc]
- ];
-
-(* -------------------------------------------------------------------- *)
-(*  5.  Charge balance and surface charge.                             *)
-(*                                                                      *)
-(*   pos and neg are the reactive-species charge sums requested         *)
-(*   (the indifferent electrolyte Na+ / Cl- is left out on purpose:     *)
-(*    their imbalance is what the mineral surface carries).             *)
-(* -------------------------------------------------------------------- *)
-
-posCharge[s_] := s["H"] + 2 s["Ca"] + 2 s["Mg"] +
-   s["CaHCO3"] + s["CaOH"] + s["MgHCO3"] + s["MgOH"];
-
-negCharge[s_] := s["OH"] + s["HCO3"] + 2 s["CO3"] +
-   2 s["NaCO3"] + s["NaHCO3"];
-
-sigma[s_] := posCharge[s] - negCharge[s];   (* surface charge, eq/L *)
-
-(* pH from the charge balance: the pH where sigma = 0, at fixed pCO2.       *)
-(* A coarse scan locates the first sign change, then bisection refines it.  *)
-pHfromCharge[caT_, mgT_, naT_, clT_, pc_] :=
- Module[{f, ps, vals, k, lo, hi, mid},
-  f[p_?NumericQ] := sigma[solveSpeciation[caT, mgT, naT, clT, p, pc]];
-  ps   = Range[2., 12., 0.25];
-  vals = f /@ ps;
-  k = SelectFirst[Range[Length[ps] - 1],
-        Sign[vals[[#]]] =!= Sign[vals[[# + 1]]] &, $Failed];
-  If[k === $Failed, Return[$Failed]];
-  lo = ps[[k]]; hi = ps[[k + 1]];
+speciate[pH_, CaT_, MgT_, NaT_, ClT_, DIC_: Automatic] :=
+ Module[{aH = 10^-pH, ii, g1, g2, cCO3, s, cOH, iiNew, k, aHCO3},
+  ii = 0.5 (NaT + ClT + 4 CaT + 4 MgT);
+  cCO3 = Max[If[DIC === Automatic, 1.*^-3, DIC] 0.1, 1.*^-12];
   Do[
-    mid = (lo + hi)/2.;
-    If[Sign[f[mid]] === Sign[f[lo]], lo = mid, hi = mid],
-    {50}];
-  (lo + hi)/2.
- ];
+    {g1, g2} = gammas[ii];
+    If[carbonate === "open",
+      Module[{cCO2 = 10^logKH pCO2atm},
+        aHCO3 = 10^logKco2 cCO2/aH;
+        cCO3 = (10^logKa2 aHCO3/aH)/g2];
+      s = buildFromCO3[cCO3, aH, g1, g2, CaT, MgT, NaT, ClT],
+      (* closed: inner loop scales cCO3 to the measured DIC *)
+      Do[ s = buildFromCO3[cCO3, aH, g1, g2, CaT, MgT, NaT, ClT];
+          Module[{new = cCO3 (DIC/s["DICc"])},
+            If[Abs[new - cCO3] < 1.*^-13 Max[cCO3, 1.*^-15], cCO3 = new; Break[]];
+            cCO3 = new], {kk, 300}];
+      s = buildFromCO3[cCO3, aH, g1, g2, CaT, MgT, NaT, ClT]];
+    cOH = KW/aH/g1;
+    iiNew = 0.5 (s["Na"] + ClT + s["H"] + cOH + 4 s["Ca"] + 4 s["Mg"] + 4 cCO3
+                 + s["HCO3"] + s["CaHCO3"] + s["CaOH"] + s["MgHCO3"] + s["MgOH"] + s["NaCO3"]);
+    If[Abs[iiNew - ii] < 1.*^-11, ii = iiNew; Break[]];
+    ii = 0.5 ii + 0.5 iiNew,
+    {k, 300}];
+  <|"pH" -> pH, "I" -> ii, "H" -> s["H"], "OH" -> cOH,
+    "Ca" -> s["Ca"], "Mg" -> s["Mg"], "Na" -> s["Na"], "Cl" -> ClT,
+    "CO3" -> cCO3, "HCO3" -> s["HCO3"], "CO2" -> s["CO2"],
+    "CaHCO3" -> s["CaHCO3"], "CaOH" -> s["CaOH"], "MgHCO3" -> s["MgHCO3"],
+    "MgOH" -> s["MgOH"], "NaCO3" -> s["NaCO3"], "DIC" -> s["DICc"]|>];
 
 (* -------------------------------------------------------------------- *)
-(*  6.  Fixed conditions                                                *)
+(*  4.  Step 4 -- charge balance  Sum_k z_k [k]  (reactive)             *)
+(*      Na+ and Cl- are omitted: conserved on mixing, they cancel in    *)
+(*      the [k]_0 - [k]_f difference.                                   *)
 (* -------------------------------------------------------------------- *)
-
-pCO2  = 10^-3.5;   (* atmospheric CO2 partial pressure (atm); change freely *)
-
-(* solid / solution ratios for the surface-charge normalisation          *)
-massSolid = 6.0;      (* g of dolomite                          *)
-volA = 0.100;         (* L in vessel A                          *)
-volC = 0.200;         (* L in vessel C (100 mL A + 100 mL B)    *)
-
-(* -------------------------------------------------------------------- *)
-(*  7.  Measured data                                                   *)
-(*      columns: pH(meas), Cl_ppm, Na_ppm, Ca_ppm, Mg_ppm               *)
-(*      (measured carbonate/alkalinity are kept only for reference;      *)
-(*       the carbonate speciation here is set by pCO2, not by them)      *)
-(* -------------------------------------------------------------------- *)
-
-(* Vessel A : dolomite + NaCl, equilibrated *)
-dataA = {
-  {8.8, 39648, 23604.3, 30.7, 42.7},
-  {8.8, 32751, 24657.7, 31.0, 46.6},
-  {8.8, 36206, 26775.3, 35.0, 49.5},
-  {8.9, 32807, 23506.8, 35.7, 45.0},
-  {8.9, 48942, 27749.8, 29.4, 43.3},
-  {8.9, 42883, 34199.3, 28.3, 41.2},
-  {9.0, 38612, 29672.0, 28.2, 41.6},
-  {9.0, 33835, 24947.5, 30.1, 43.8},
-  {9.0, 30515, 21705.0, 30.6, 45.1}
-};
-
-(* Vessel B : NaCl blank, pH pre-adjusted (no Ca, no Mg) *)
-(* columns: pH(meas), Cl_ppm, Na_ppm  ( Ca = Mg = 0 )    *)
-dataB = {
-  {1.8, 16777, 24113},
-  {2.1, 17017, 32927},
-  {2.1, 16827, 23180},
-  {2.4, 16937, 53900},
-  {5.5, 16838, 23718},
-  {10.5, 16879, 21836},
-  {10.6, 16854, 21302},
-  {10.6, 16829, 21073},
-  {10.8, 17022, 23484}
-};
-
-(* Vessel C : mixture A + B after re-equilibration *)
-dataC = {
-  {7.0, 26800, 16953.4, 1325.3, 233.9},
-  {7.2, 36300, 25729.3,  755.1, 180.4},
-  {7.5, 32258, 23296.4,  560.6, 145.9},
-  {7.5, 24901, 19593.1,  398.9, 114.2},
-  {8.8, 24244, 16466.5,   37.2,  24.4},
-  {9.8, 23699, 16183.2,   15.6,  13.6},
-  {10.2, 21815, 14759.0,  16.3,   4.4},
-  {10.2, 24118, 16450.8,  17.0,   3.6},
-  {10.6, 22678, 15393.8,   9.8,   1.0}
-};
+qCharge[s_] :=
+  (+1 s["H"] - 1 s["OH"])                              (* q_H   *)
+  + (-1 s["HCO3"] - 2 s["CO3"] - 1 s["NaCO3"])         (* q_DIC *)
+  + (+2 s["Ca"] + 1 s["CaHCO3"] + 1 s["CaOH"])         (* q_Ca  *)
+  + (+2 s["Mg"] + 1 s["MgHCO3"] + 1 s["MgOH"]);        (* q_Mg  *)
 
 (* -------------------------------------------------------------------- *)
-(*  8.  Solve every sample                                              *)
-(*      returns: measured pH, calculated pH, full speciation, and the   *)
-(*      surface charge (evaluated at the calculated pH and, for         *)
-(*      reference, at the measured pH).                                 *)
+(*  5.  Measured data (run-aligned): {pH, Cl, Na, Ca, Mg, CO3, HCO3} mg/L*)
 (* -------------------------------------------------------------------- *)
+dataA = {{8.9,48942,27749.8,29.4,43.3,27.9,119.8},{8.8,39648,23604.3,30.7,42.7,23.4,127.8},
+  {8.9,42883,34199.3,28.3,41.2,32.1,107.8},{9.0,38612,29672.0,28.2,41.6,31.7,116.1},
+  {9.0,33835,24947.5,30.1,43.8,30.4,109.7},{8.8,36206,26775.3,35.0,49.5,23.5,125.5},
+  {8.8,32751,24657.7,31.0,46.6,20.8,131.5},{9.0,30515,21705.0,30.6,45.1,35.0,121.0},
+  {8.9,32807,23506.8,35.7,45.0,22.9,128.3}};
+dataB = {{2.4,16937,53900,0,0,0,0},{2.1,17017,32927,0,0,0,0},{2.1,16827,23180,0,0,0,0},
+  {1.8,16777,24113,0,0,0,0},{5.5,16838,23718,0,0,0,0},{10.5,16879,21836,0,0,48.0,0},
+  {10.6,16854,21302,0,0,46.6,0},{10.6,16829,21073,0,0,55.0,0},{10.8,17022,23484,0,0,80.1,0}};
+dataC = {{7.5,24901,19593.1,398.9,114.2,0,407.6},{7.5,32258,23296.4,560.6,145.9,0,413.3},
+  {7.2,36300,25729.3,755.1,180.4,0,250.1},{7.0,26800,16953.4,1325.3,233.9,0,527.5},
+  {8.8,24244,16466.5,37.2,24.4,18.2,106.1},{9.8,23699,16183.2,15.6,13.6,92.8,7.2},
+  {10.2,21815,14759.0,16.3,4.4,120.2,0},{10.2,24118,16450.8,17.0,3.6,134.0,0},
+  {10.6,22678,15393.8,9.8,1.0,136.4,0}};
 
-(* NOTE: the parameter is named pc_ (not pCO2_).  By this point pCO2 already
-   holds a numeric value, so writing pCO2_ here would be read as
-   Pattern[<number>, _] and Mathematica would reject the whole definition. *)
-analyseRow[{pHmeas_, clPpm_, naPpm_, caPpm_, mgPpm_}, pc_] :=
- Module[{caT, mgT, naT, clT, pHc, sCalc, sMeas},
-  caT = ppmToM[caPpm, mmCa];
-  mgT = ppmToM[mgPpm, mmMg];
-  naT = ppmToM[naPpm, mmNa];
-  clT = ppmToM[clPpm, mmCl];
-  pHc = pHfromCharge[caT, mgT, naT, clT, pc];
-  sCalc = solveSpeciation[caT, mgT, naT, clT, pHc, pc];
-  sMeas = solveSpeciation[caT, mgT, naT, clT, pHmeas, pc];
-  <|
-   "pHmeas"  -> pHmeas,
-   "pHcalc"  -> pHc,
-   "spec"    -> sCalc,           (* speciation at the calculated pH *)
-   "Qcalc"   -> sigma[sCalc],    (* = 0 by construction (reference) *)
-   "Qmeas"   -> sigma[sMeas]     (* surface charge at the measured pH, eq/L *)
-  |>
- ];
+(* strong titrant added to each B run (mol/L): runs 1-4 HCl, runs 6-9 NaOH *)
+HClB  = {0.001,0.002,0.003,0.004,0,0,0,0,0};
+NaOHB = {0,0,0,0,0,0.001,0.002,0.003,0.004};
 
-(* form for vessel B (no Ca/Mg) reuses the same routine *)
-analyseRowB[{pHmeas_, clPpm_, naPpm_}, pc_] :=
-  analyseRow[{pHmeas, clPpm, naPpm, 0., 0.}, pc];
-
-resultsA = analyseRow[#, pCO2] & /@ dataA;
-resultsB = analyseRowB[#, pCO2] & /@ dataB;
-resultsC = analyseRow[#, pCO2] & /@ dataC;
+totals[row_] := Module[{},
+  {row[[4]]/mmCa/1000., row[[5]]/mmMg/1000., row[[3]]/mmNa/1000., row[[2]]/mmCl/1000.,
+   (row[[6]]/mmCO3 + row[[7]]/mmHCO3)/1000.}];
 
 (* -------------------------------------------------------------------- *)
-(*  9.  Speciation tables for A, B and C                                *)
+(*  6.  Step 5 -- surface charge (Pokrovsky Eqn 1)                       *)
 (* -------------------------------------------------------------------- *)
+speciateRow[row_] := Module[{t = totals[row]},
+  speciate[row[[1]], t[[1]], t[[2]], t[[3]], t[[4]], t[[5]]]];
 
-speciesOrder = {"H", "OH", "CO2", "HCO3", "CO3",
-   "Ca", "CaCl", "CaCO3", "CaHCO3", "CaOH",
-   "Mg", "MgCl", "MgCO3", "MgHCO3", "MgOH",
-   "Na", "NaCO3", "NaHCO3", "NaCl", "NaOH", "Cl"};
-
-speciationTable[results_, label_] :=
- Module[{header, rows},
-  header = Prepend[Table["S" <> ToString[i], {i, Length[results]}], "species (mol/L)"];
-  rows = Table[
-    Prepend[
-     Table[ScientificForm[results[[j, "spec", sp]], 3], {j, Length[results]}],
-     sp],
-    {sp, speciesOrder}];
-  Labeled[
-   Grid[Prepend[rows, header], Frame -> All, Alignment -> Left,
-    Background -> {None, {{Lighter[Yellow, 0.8], None}}}],
-   Style["Vessel " <> label <> " : speciation at the calculated pH", Bold, 14],
-   Top]
- ];
-
-pHtable[results_, label_] :=
- Module[{header, rows},
-  header = {"sample", "pH measured", "pH calculated", "Q at measured pH (eq/L)"};
-  rows = Table[
-    {i, results[[i, "pHmeas"]], NumberForm[results[[i, "pHcalc"]], {4, 2}],
-     ScientificForm[results[[i, "Qmeas"]], 3]},
-    {i, Length[results]}];
-  Labeled[
-   Grid[Prepend[rows, header], Frame -> All, Alignment -> Left],
-   Style["Vessel " <> label <> " : measured vs calculated pH", Bold, 14], Top]
- ];
-
-(* Print the tables *)
-Print[pHtable[resultsA, "A"]];
-Print[pHtable[resultsB, "B"]];
-Print[pHtable[resultsC, "C"]];
-Print[speciationTable[resultsA, "A"]];
-Print[speciationTable[resultsB, "B"]];
-Print[speciationTable[resultsC, "C"]];
+surfaceCharge := Table[
+  Module[{sA = speciateRow[dataA[[i]]], sB = speciateRow[dataB[[i]]],
+          sC = speciateRow[dataC[[i]]], q0, qf},
+   q0 = 0.5 (qCharge[sA] + qCharge[sB]);   (* Sum z_k [k]_0 *)
+   qf = qCharge[sC];                       (* Sum z_k [k]_f *)
+   <|"run" -> i, "pHC" -> dataC[[i, 1]], "sigmaT" -> (q0 - qf)/St*1000.|>], {i, 9}];
 
 (* -------------------------------------------------------------------- *)
-(* 10.  Surface charge plots                                            *)
-(*                                                                      *)
-(*   sigma(pH) is the reactive charge imbalance the surface must carry. *)
-(*   It crosses zero at the calculated pH (no surface interaction) and  *)
-(*   is negative/positive when the real (measured) pH sits above/below. *)
+(*  7.  Data-quality budgets  (runs 1-4 fail the acid balance)          *)
 (* -------------------------------------------------------------------- *)
-
-meanTotals[data_] := Mean[
-   (# /. {pHm_, cl_, na_, ca_, mg_} :>
-        {ppmToM[ca, mmCa], ppmToM[mg, mmMg], ppmToM[na, mmNa], ppmToM[cl, mmCl]}) & /@
-    (If[Length[First[data]] == 3,
-       (Join[#, {0., 0.}] &) /@ data,   (* pad B (pH,Cl,Na) with Ca=Mg=0 *)
-       data])];
-
-(* p_?NumericQ keeps this unevaluated during Plot's symbolic pass *)
-sigmaCurve[{caT_, mgT_, naT_, clT_}, p_?NumericQ] :=
-  sigma[solveSpeciation[caT, mgT, naT, clT, p, pCO2]];
-
-(* per-gram conversion (mol charge per g of solid); B has no solid *)
-perGram[Q_, vol_] := Q vol / massSolid;
-
-(* --- (a) surface charge titration curve, mean composition of each vessel --- *)
-tA = meanTotals[dataA];
-tC = meanTotals[dataC];
-
-plotAC = Plot[
-   {perGram[sigmaCurve[tA, p], volA]*1000,
-    perGram[sigmaCurve[tC, p], volC]*1000},
-   {p, 6, 11},
-   PlotRange -> All,
-   Frame -> True,
-   FrameLabel -> {"pH (calculated)", "surface charge  (mmol / g)"},
-   PlotLegends -> {"Vessel A (mean)", "Vessel C (mean)"},
-   PlotLabel -> "Surface charge from the charge balance  ( pCO2 fixed )",
-   GridLines -> Automatic, ImageSize -> 520];
-
-(* --- (b) surface charge of each sample at its measured pH --- *)
-ptsA = {#["pHmeas"], perGram[#["Qmeas"], volA]*1000} & /@ resultsA;
-ptsC = {#["pHmeas"], perGram[#["Qmeas"], volC]*1000} & /@ resultsC;
-
-plotPts = ListPlot[{ptsA, ptsC},
-   Frame -> True,
-   FrameLabel -> {"pH (measured)", "surface charge  (mmol / g)"},
-   PlotLegends -> {"Vessel A", "Vessel C"},
-   PlotStyle -> {Red, Blue},
-   PlotMarkers -> {Automatic, 12},
-   PlotLabel -> "Surface charge at the measured pH",
-   GridLines -> Automatic, ImageSize -> 520];
-
-Print[plotAC];
-Print[plotPts];
+budgets := Table[
+  Module[{tA = totals[dataA[[i]]], tC = totals[dataC[[i]]], acid, dCat},
+   dCat = 2 ((tC[[1]] + tC[[2]]) - 0.5 (tA[[1]] + tA[[2]]));
+   acid = (HClB[[i]] - NaOHB[[i]])/2;
+   <|"run" -> i, "pHC" -> dataC[[i, 1]], "acidMeq" -> acid*1000.,
+     "dCatMeq" -> dCat*1000.,
+     "ratio" -> If[acid != 0, Abs[dCat/acid], Missing[]],
+     "coherent" -> If[i >= 5, "yes", "no (acid budget fails)"]|>], {i, 9}];
 
 (* -------------------------------------------------------------------- *)
-(*  Notes                                                               *)
-(*   1. Concentrations are used directly (activity coefficients = 1).   *)
-(*      At the very high ionic strength of these NaCl solutions a       *)
-(*      Davies / SIT / Pitzer correction would shift the numbers; add   *)
-(*      gamma factors inside allSpecies if needed.                      *)
-(*   2. Carbonate is fixed by pCO2. To use the measured alkalinity      *)
-(*      instead, replace hco3/co3 in allSpecies by a carbonate mass     *)
-(*      balance.                                                        *)
-(*   3. The surface charge here is purely a charge-balance quantity --  *)
-(*      no surface complexation constants are fitted or assumed.        *)
+(*  8.  Titration curve -- coherent runs 5-9 vs the MEASURED pH          *)
 (* -------------------------------------------------------------------- *)
+plotCurve := Module[{sc = surfaceCharge, coh, drp},
+  coh = Select[sc, #["run"] >= 5 &];
+  drp = Select[sc, #["run"] <= 4 &];
+  Show[
+   ListLinePlot[{#["pHC"], #["sigmaT"]} & /@ coh, PlotMarkers -> Automatic,
+     PlotStyle -> RGBColor[0.17, 0.37, 0.54], PlotLegends -> {"runs 5-9 (coherent)"}],
+   ListPlot[{#["pHC"], #["sigmaT"]} & /@ drp, PlotStyle -> Gray],
+   Plot[{siteCeiling, -siteCeiling}, {x, 6.8, 10.8},
+     PlotStyle -> Directive[Red, Dotted]],
+   Frame -> True, FrameLabel -> {"measured pH of reactor C", "sigmaT (mmol/m2)"},
+   PlotLabel -> "Dolomite surface charge -- Pokrovsky Eqn 1 (" <> carbonate <> ")"]];
+
+(* Evaluate:  Dataset[surfaceCharge] , Dataset[budgets] , plotCurve *)

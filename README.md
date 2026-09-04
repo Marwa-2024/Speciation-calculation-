@@ -1,104 +1,80 @@
 # Dolomite surface titration — speciation and surface charge
 
-A Wolfram (Mathematica) notebook that reproduces the batch surface titration of
-dolomite in NaCl solutions following Pokrovsky et al. (1999). It solves the
-aqueous speciation, calculates pH from the charge balance at a fixed CO₂
-partial pressure, and derives the surface charge directly from the charge
-balance — no surface complexation model is fitted or assumed.
+Reproduces the batch surface titration of dolomite in NaCl solutions following
+**Pokrovsky et al. (1999)**. The aqueous speciation is solved with Davies activity
+coefficients and Plummer–Busenberg / Nordstrom formation constants, and the net
+surface charge is the charge-sum difference of Charlet et al. (1990) — no surface
+complexation model is fitted or assumed.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `DolomiteSurfaceTitration.ipynb` | Google Colab / Jupyter notebook (Python). Open in Colab and run all. |
-| `DolomiteSurfaceTitration.nb` | The notebook to open in Mathematica. |
+| `DolomiteSurfaceTitration.ipynb` | Google Colab / Jupyter notebook (Python). The executed, verified reference. |
+| `DolomiteSurfaceTitration.nb` | Mathematica notebook, mirrors the Python. |
 | `DolomiteSurfaceTitration.wl` | The same Mathematica code as a plain package/script. |
 
 ### Running in Google Colab
 
 Open [colab.research.google.com](https://colab.research.google.com), choose **File ▸ Upload
-notebook**, pick `DolomiteSurfaceTitration.ipynb`, then **Runtime ▸ Run all**. Every
-library it uses (numpy, scipy, matplotlib, pandas) ships with Colab, so there is nothing
-to install. The Python notebook carries the current method (corrected charge coefficients and
-the proton mass balance surface charge); the Mathematica files still hold the earlier
-charge-balance version and have not yet been updated to match.
+notebook**, pick `DolomiteSurfaceTitration.ipynb`, then **Runtime ▸ Run all**. It uses only
+numpy, pandas and matplotlib, which ship with Colab. The Mathematica files mirror the same
+method; the Python notebook is the version that has been executed and verified.
 
-## What is calculated
+## Method
 
-**Unknowns (free ion concentrations):** H⁺, Ca²⁺, Mg²⁺, Na⁺, Cl⁻. Carbonate
-(CO₂(aq), HCO₃⁻, CO₃²⁻) is set by the fixed pCO₂ together with H⁺, so the
-system is open with respect to CO₂.
-
-**Law of mass action.** Every complex is written from its dissociation constant
-(25 °C, taken from the supplied TOUGHREACT/EQ3-6 database):
-
-- Carbonate: CO₂(aq)+H₂O = H⁺+HCO₃⁻ (log K = −6.345); HCO₃⁻ = H⁺+CO₃²⁻ (−10.329);
-  H₂O = H⁺+OH⁻ (−13.995); [CO₂(aq)] = 10^(−1.468)·pCO₂.
-- Calcium: CaCl⁺, CaCO₃(aq), CaHCO₃⁺, CaOH⁺.
-- Magnesium: MgCl⁺, MgCO₃(aq), MgHCO₃⁺, MgOH⁺.
-- Sodium: NaCO₃⁻, NaHCO₃(aq), NaCl(aq), NaOH(aq).
-
-**Mass balances** are enforced for Ca, Mg, Na and Cl, using the measured totals
-(ppm converted to mol/L).
-
-**pH from the charge balance.** For each sample the notebook finds the pH at
-which the reactive charge balance closes:
+**Surface charge (Pokrovsky Eqn 1).** The net surface charge is the charge-sum difference
+between the conservative A+B mix (the zero-charge reference) and the actual reactor C:
 
 ```
-pos = H⁺ + 2·Ca²⁺ + 2·Mg²⁺ + CaHCO₃⁺ + CaOH⁺ + MgHCO₃⁺ + MgOH⁺
-neg = OH⁻ + HCO₃⁻ + 2·CO₃²⁻ + NaCO₃⁻
-pos − neg = net_acid           (net_acid = C_HCl − C_NaOH)
+σ_T = ( Σ z_k [k]_0  −  Σ z_k [k]_f ) / S
 ```
 
-The background electrolyte (free Na⁺, Cl⁻) is deliberately left out of `pos`/`neg`;
-its imbalance is what the mineral surface carries. NaCO₃⁻ carries a single negative
-charge and NaHCO₃(aq) is neutral, so it drops out of the sum. Every pH is calculated;
-the electrode reading is kept only for comparison.
+`[k]_0` is the closed 1:1 mix of reactors A and B; `[k]_f` is reactor C, both speciated at the
+**measured** pH; `S` is the dolomite surface area per litre of C (0.84 m²/g × 30 g/L = 25.2 m²/L).
+Free Na⁺ and Cl⁻ are omitted from the charge sum — they are conserved on mixing and cancel in the
+difference.
 
-**Titrant carried explicitly.** Vessel B is a bare NaCl blank whose pH is set entirely
-by the HCl or NaOH used to preset it. That dose is tiny next to the analytical Na/Cl,
-so it must enter the balance as its own proton source — otherwise every B run collapses
-to the same neutral pH. The added strong acid/base per run (runs 1–4 HCl, run 5 none,
-runs 6–9 NaOH, in cumulative 0.001 mol/L steps) is listed in the notebook as `net_acid_B`,
-and the calculated pH is found where `pos − neg = net_acid`.
+**Solved step by step.** Each stage is a separate, labeled block in the notebook:
 
-**Surface charge (proton mass balance).** The calculated pH is fixed by the charge
-balance above, so that same sum is zero for every solution and cannot itself be the
-surface charge. Instead the surface charge is the net proton exchange between the
-conservative A+B mixture and the reacted suspension C:
+1. **Activity coefficients (Davies).** `log γ_z = −A z² ( √I/(1+√I) − 0.3 I )`, iterated on ionic strength.
+2. **Law of mass action, γ-substituted.** Every complex from its formation constant in activities,
+   then converted to concentration, e.g. `[CaCO₃] = 10^K · γ₂² · [Ca²⁺][CO₃²⁻]`.
+3. **Free ions from the mass balances.** `[Ca²⁺] = Ca_T / d_Ca` with `d_Ca` the sum over all Ca species.
+4. **Charge balance.** `Σ z_k [k]`, grouped as `q_H + q_DIC + q_Ca + q_Mg`.
+5. **Surface charge.** Eqn 1 above.
 
-```
-σ_H = ( TOTH_mix − TOTH_C ) / St ,     TOTH_mix = ( TOTH_A + TOTH_B ) / 2
-```
+**Carbonate switch.** `CARBONATE = 'closed'` (default) uses the measured alkalinity, as in the paper,
+and keeps carbonate near the measured ~1–2 mM. `CARBONATE = 'open'` fixes CO₂(aq) by Henry's law at
+atmospheric pCO₂. Open pCO₂ predicts hundreds of mM of carbonate above pH 9 and the base-run surface
+charge blows up to ±10–25 mmol/m², so `'closed'` is the default; set `'open'` to reproduce the breakdown.
 
-`TOTH` is the total proton excess of a solution relative to the reference components
-(H₂O, CO₃²⁻, Ca²⁺, Mg²⁺, Na⁺, Cl⁻). The fixed-pCO₂ term is identical in every solution
-and cancels in the difference, so the open CO₂ reservoir contributes nothing to the
-surface charge. `St` is the surface area per litre of vessel C (specific area × loading,
-0.84 m²/g × 30 g/L = 25.2 m²/L). The notebook reports σ_H per m² and plots it against
-the calculated pH of vessel C: positive as pH drops, negative at high pH.
+**Measured pH.** Pokrovsky computes `[k]_f` from the measured pH, alkalinity and total Ca/Mg, so the
+speciation uses the electrode pH directly — it is the observable that encodes the surface reaction.
 
-## Vessels
+## Vessels and data quality
 
-- **A** — dolomite + NaCl, equilibrated (Ca, Mg released by the solid).
-- **B** — NaCl blank, pH pre-adjusted (no Ca, no Mg; the calculated pH reflects
-  only the water/carbonate system because the strong acid/base titrant is not a
-  species in the balance).
-- **C** — the A + B mixture after re-equilibration; this vessel gives the clearest
-  surface-charge trend, positive at low pH and negative at high pH.
+- **A** — dolomite + NaCl, equilibrated (Ca, Mg released by the solid); the zero-charge reference.
+- **B** — NaCl blank, pH pre-adjusted (runs 1–4 HCl, run 5 none, runs 6–9 NaOH, in cumulative
+  0.001 mol/L steps).
+- **C** — the A + B mixture after re-equilibration.
 
-## Assumptions and knobs
+Two conservation budgets flag which runs are real titrations:
 
-1. Concentrations are used directly (activity coefficients = 1). At the high
-   ionic strength of these NaCl solutions a Davies/SIT/Pitzer correction would
-   shift the numbers; add γ factors inside `allSpecies` if required.
-2. `pCO2` is a single parameter near the top of the notebook (default 10^(−3.5)
-   atm). To use the measured alkalinity instead, replace the carbonate lines in
-   `allSpecies` with a carbonate mass balance.
-3. No surface complexation constants are used — the surface charge is a proton
-   mass balance derived from the measured cations and the aqueous speciation only.
-4. Forcing an open system together with a calculated pH detaches the model pH from
-   the electrode (large dissolved Ca/Mg in equilibrium with atmospheric CO₂ must be
-   alkaline), so the calculated pH is an internal reference rather than a prediction
-   of the measured value. Runs 1–4 show strong dissolution and their σ_H is dominated
-   by carbonate released into solution, not by simple surface protonation.
+- **Acid budget.** Dissolution by acid consumes ~2 protons per divalent cation pair. Runs 1–4 release
+  20–40× more divalent cation than the 0.001–0.004 mol/L of HCl can explain (run 4: 2 meq/L acid vs
+  83 meq/L cations), so those points are **not** acid-driven titrations and are dropped from the curve.
+- **Carbon budget.** The carbon released in runs 1–4 is likewise unaccounted for. Runs 5–9 close both
+  budgets to within about a factor of two, so the titration curve is built from runs 5–9, plotted
+  against the measured pH and compared to the 0.0166 mmol/m² (~10 sites/nm²) site-density ceiling.
+
+## Notes
+
+1. **No surface complexation model** — the surface charge is the aqueous charge-sum difference of
+   Eqn 1, from the measured cations, alkalinity and pH only.
+2. **Activity coefficients (Davies)** and Plummer–Busenberg / Nordstrom formation constants, as in
+   the paper; ionic strength is iterated to convergence.
+3. **Open vs closed carbonate** is a one-line switch; closed (measured alkalinity) is the default
+   because open atmospheric pCO₂ is inconsistent with the measured DIC above pH 9.
+4. The Mathematica `.nb`/`.wl` mirror the Python method but have not been executed in-engine here;
+   the Python notebook is the verified reference.
