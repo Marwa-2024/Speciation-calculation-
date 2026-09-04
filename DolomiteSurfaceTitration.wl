@@ -61,11 +61,14 @@ logKNaOH   = 14.180;   (* NaOH(aq)  = Na+ + H2O - H+   *)
 (*      coefficients -- see the note at the end).                       *)
 (* -------------------------------------------------------------------- *)
 
+(* the pCO2 argument is called pc_ so the definition never clashes with the
+   global pCO2 value set further down (a symbol that already holds a value
+   cannot be used as a pattern name). *)
 allSpecies[h_?NumericQ, cCa_?NumericQ, cMg_?NumericQ, cNa_?NumericQ,
-           cCl_?NumericQ, pCO2_?NumericQ] :=
+           cCl_?NumericQ, pc_?NumericQ] :=
  Module[{co2, hco3, co3, oh},
   (* carbonate fixed by pCO2 and h *)
-  co2  = 10^logKH * pCO2;
+  co2  = 10^logKH * pc;
   hco3 = 10^logK1 * co2 / h;      (* CO2 + H2O = H+ + HCO3-  *)
   co3  = 10^logK2 * hco3 / h;     (* HCO3-     = H+ + CO3^2- *)
   oh   = 10^logKw / h;            (* H2O       = H+ + OH-    *)
@@ -114,14 +117,14 @@ totCl[h_, cCa_, cMg_, cNa_, cCl_, p_] := With[{s = allSpecies[h, cCa, cMg, cNa, 
 (*      free ion concentrations, then return every species.            *)
 (* -------------------------------------------------------------------- *)
 
-solveSpeciation[caT_, mgT_, naT_, clT_, pH_, pCO2_] :=
+solveSpeciation[caT_, mgT_, naT_, clT_, pH_, pc_] :=
  Module[{h = 10.^(-pH), cCa, cMg, cNa, cCl, sol},
   sol = FindRoot[
     {
-     totCa[h, cCa, cMg, cNa, cCl, pCO2] == caT,
-     totMg[h, cCa, cMg, cNa, cCl, pCO2] == mgT,
-     totNa[h, cCa, cMg, cNa, cCl, pCO2] == naT,
-     totCl[h, cCa, cMg, cNa, cCl, pCO2] == clT
+     totCa[h, cCa, cMg, cNa, cCl, pc] == caT,
+     totMg[h, cCa, cMg, cNa, cCl, pc] == mgT,
+     totNa[h, cCa, cMg, cNa, cCl, pc] == naT,
+     totCl[h, cCa, cMg, cNa, cCl, pc] == clT
     },
     {
      {cCa, Max[caT, 1.*^-12]},
@@ -130,7 +133,7 @@ solveSpeciation[caT_, mgT_, naT_, clT_, pH_, pCO2_] :=
      {cCl, Max[clT, 1.*^-12]}
     },
     MaxIterations -> 500];
-  allSpecies[h, cCa /. sol, cMg /. sol, cNa /. sol, cCl /. sol, pCO2]
+  allSpecies[h, cCa /. sol, cMg /. sol, cNa /. sol, cCl /. sol, pc]
  ];
 
 (* -------------------------------------------------------------------- *)
@@ -149,26 +152,22 @@ negCharge[s_] := s["OH"] + s["HCO3"] + 2 s["CO3"] +
 
 sigma[s_] := posCharge[s] - negCharge[s];   (* surface charge, eq/L *)
 
-(* pH from the charge balance: the pH where sigma = 0, at fixed pCO2 *)
-pHfromCharge[caT_, mgT_, naT_, clT_, pCO2_] :=
- Module[{f, lo = 3., hi = 12., mid, flo, fhi},
-  f[p_?NumericQ] := sigma[solveSpeciation[caT, mgT, naT, clT, p, pCO2]];
-  flo = f[lo]; fhi = f[hi];
-  If[Sign[flo] === Sign[fhi],
-   (* no sign change in the window: fall back to a scan *)
-   Module[{grid = Table[{p, f[p]}, {p, lo, hi, 0.25}], k},
-    k = SelectFirst[Range[Length[grid] - 1],
-        Sign[grid[[#, 2]]] =!= Sign[grid[[# + 1, 2]]] &, Missing[]];
-    If[MissingQ[k], Return[$Failed]];
-    {lo, hi} = {grid[[k, 1]], grid[[k + 1, 1]]}
-   ]
-  ];
-  (* bisection *)
+(* pH from the charge balance: the pH where sigma = 0, at fixed pCO2.       *)
+(* A coarse scan locates the first sign change, then bisection refines it.  *)
+pHfromCharge[caT_, mgT_, naT_, clT_, pc_] :=
+ Module[{f, ps, vals, k, lo, hi, mid},
+  f[p_?NumericQ] := sigma[solveSpeciation[caT, mgT, naT, clT, p, pc]];
+  ps   = Range[2., 12., 0.25];
+  vals = f /@ ps;
+  k = SelectFirst[Range[Length[ps] - 1],
+        Sign[vals[[#]]] =!= Sign[vals[[# + 1]]] &, $Failed];
+  If[k === $Failed, Return[$Failed]];
+  lo = ps[[k]]; hi = ps[[k + 1]];
   Do[
-    mid = (lo + hi)/2;
+    mid = (lo + hi)/2.;
     If[Sign[f[mid]] === Sign[f[lo]], lo = mid, hi = mid],
-    {60}];
-  (lo + hi)/2
+    {50}];
+  (lo + hi)/2.
  ];
 
 (* -------------------------------------------------------------------- *)
@@ -236,15 +235,18 @@ dataC = {
 (*      reference, at the measured pH).                                 *)
 (* -------------------------------------------------------------------- *)
 
-analyseRow[{pHmeas_, clPpm_, naPpm_, caPpm_, mgPpm_}, pCO2_] :=
+(* NOTE: the parameter is named pc_ (not pCO2_).  By this point pCO2 already
+   holds a numeric value, so writing pCO2_ here would be read as
+   Pattern[<number>, _] and Mathematica would reject the whole definition. *)
+analyseRow[{pHmeas_, clPpm_, naPpm_, caPpm_, mgPpm_}, pc_] :=
  Module[{caT, mgT, naT, clT, pHc, sCalc, sMeas},
   caT = ppmToM[caPpm, mmCa];
   mgT = ppmToM[mgPpm, mmMg];
   naT = ppmToM[naPpm, mmNa];
   clT = ppmToM[clPpm, mmCl];
-  pHc = pHfromCharge[caT, mgT, naT, clT, pCO2];
-  sCalc = solveSpeciation[caT, mgT, naT, clT, pHc, pCO2];
-  sMeas = solveSpeciation[caT, mgT, naT, clT, pHmeas, pCO2];
+  pHc = pHfromCharge[caT, mgT, naT, clT, pc];
+  sCalc = solveSpeciation[caT, mgT, naT, clT, pHc, pc];
+  sMeas = solveSpeciation[caT, mgT, naT, clT, pHmeas, pc];
   <|
    "pHmeas"  -> pHmeas,
    "pHcalc"  -> pHc,
@@ -254,9 +256,9 @@ analyseRow[{pHmeas_, clPpm_, naPpm_, caPpm_, mgPpm_}, pCO2_] :=
   |>
  ];
 
-(* two-argument form so B (no Ca/Mg) reuses the same routine *)
-analyseRowB[{pHmeas_, clPpm_, naPpm_}, pCO2_] :=
-  analyseRow[{pHmeas, clPpm, naPpm, 0., 0.}, pCO2];
+(* form for vessel B (no Ca/Mg) reuses the same routine *)
+analyseRowB[{pHmeas_, clPpm_, naPpm_}, pc_] :=
+  analyseRow[{pHmeas, clPpm, naPpm, 0., 0.}, pc];
 
 resultsA = analyseRow[#, pCO2] & /@ dataA;
 resultsB = analyseRowB[#, pCO2] & /@ dataB;
@@ -318,10 +320,11 @@ meanTotals[data_] := Mean[
    (# /. {pHm_, cl_, na_, ca_, mg_} :>
         {ppmToM[ca, mmCa], ppmToM[mg, mmMg], ppmToM[na, mmNa], ppmToM[cl, mmCl]}) & /@
     (If[Length[First[data]] == 3,
-       (Insert[#, 0., {{4}, {5}}] &) /@ data,   (* pad B with Ca=Mg=0 *)
+       (Join[#, {0., 0.}] &) /@ data,   (* pad B (pH,Cl,Na) with Ca=Mg=0 *)
        data])];
 
-sigmaCurve[{caT_, mgT_, naT_, clT_}, p_] :=
+(* p_?NumericQ keeps this unevaluated during Plot's symbolic pass *)
+sigmaCurve[{caT_, mgT_, naT_, clT_}, p_?NumericQ] :=
   sigma[solveSpeciation[caT, mgT, naT, clT, p, pCO2]];
 
 (* per-gram conversion (mol charge per g of solid); B has no solid *)
