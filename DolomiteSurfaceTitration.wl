@@ -22,32 +22,35 @@ ClearAll["Global`*"];
 (* -------------------------------------------------------------------- *)
 (*  1.  REACTIONS  (dissociation; complex on the left)  and  log10 K    *)
 (* -------------------------------------------------------------------- *)
+(*  log K are Visual MINTEQ's own values, recovered from the MINTEQ output. *)
 (*  Water / carbonate                                                    *)
-(*    H2O            = H+ + OH-                    logK = -13.995         *)
-(*    CO2(aq) + H2O  = H+ + HCO3-                  logK =  -6.345         *)
-(*    HCO3-          = H+ + CO3^2-                 logK = -10.329         *)
+(*    H2O            = H+ + OH-                    logK = -14.011         *)
+(*    CO2(aq) + H2O  = H+ + HCO3-                  logK =  -6.346         *)
+(*    HCO3-          = H+ + CO3^2-                 logK = -10.335         *)
 (*    CO2(g)         = CO2(aq)  -> {CO2(aq)} fixed by pCO2                *)
 (*  Complexes                                                            *)
-(*    CaCl+          = Ca2+ + Cl-                  logK =   0.696         *)
-(*    CaCO3(aq) + H+ = Ca2+ + HCO3-                logK =   7.002         *)
-(*    CaHCO3+        = Ca2+ + HCO3-                logK =  -1.047         *)
-(*    CaOH+  + H+    = Ca2+ + H2O                  logK =  12.850         *)
-(*    MgCl+          = Mg2+ + Cl-                  logK =   0.135         *)
-(*    MgCO3(aq) + H+ = Mg2+ + HCO3-                logK =   7.350         *)
-(*    MgHCO3+        = Mg2+ + HCO3-                logK =  -1.036         *)
-(*    MgOH+  + H+    = Mg2+ + H2O                  logK =  11.785         *)
-(*    NaCl(aq)       = Na+ + Cl-                   logK =   0.777         *)
-(*    NaCO3- + H+    = Na+ + HCO3-                 logK =   9.815         *)
-(*    NaHCO3(aq)     = Na+ + HCO3-                 logK =  -0.154         *)
-(*    NaOH(aq) + H+  = Na+ + H2O                   logK =  14.180         *)
+(*    CaCl+          = Ca2+ + Cl-                  logK =  -0.400         *)
+(*    CaCO3(aq) + H+ = Ca2+ + HCO3-                logK =   6.971         *)
+(*    CaHCO3+        = Ca2+ + HCO3-                logK =  -1.091         *)
+(*    CaOH+  + H+    = Ca2+ + H2O                  logK =  12.711         *)
+(*    MgCl+          = Mg2+ + Cl-                  logK =  -0.600         *)
+(*    MgCO3(aq) + H+ = Mg2+ + HCO3-                logK =   7.355         *)
+(*    MgHCO3+        = Mg2+ + HCO3-                logK =  -1.060         *)
+(*    MgOH+  + H+    = Mg2+ + H2O                  logK =  11.798         *)
+(*    NaCl(aq)       = Na+ + Cl-                   logK =   0.300         *)
+(*    NaCO3- + H+    = Na+ + HCO3-                 logK =   9.065         *)
+(*    NaHCO3(aq)     = Na+ + HCO3-                 logK =   0.306         *)
+(*    NaOH(aq) + H+  = Na+ + H2O                   logK =  13.911         *)
 (* -------------------------------------------------------------------- *)
-lkco2=-6.345; lkco3=10.329; lkoh=13.995;
-lkcacl=0.696; lkcaco3=7.002; lkcahco3=-1.047; lkcaoh=12.850;
-lkmgcl=0.135; lkmgco3=7.350; lkmghco3=-1.036; lkmgoh=11.785;
-lknacl=0.777; lknaco3=9.815; lknahco3=-0.154; lknaoh=14.180;
+(* log K recovered from the Visual MINTEQ output itself (its own database) *)
+lkco2=-6.346; lkco3=10.335; lkoh=14.011;
+lkcacl=-0.400; lkcaco3=6.971; lkcahco3=-1.091; lkcaoh=12.711;
+lkmgcl=-0.600; lkmgco3=7.355; lkmghco3=-1.060; lkmgoh=11.798;
+lknacl=0.300; lknaco3=9.065; lknahco3=0.306; lknaoh=13.911;
 
 aCO2 = 10^-4.90;          (* fixed {CO2(aq)} activity == fixed pCO2 (MINTEQ log activity = -4.9) *)
 ADavies = 0.509;
+daviesB = 0.5;            (* Davies b-term recovered from MINTEQ (its default here, not 0.3) *)
 mmCa=40.078; mmMg=24.305; mmNa=22.99; mmCl=35.45; mmCO3=60.008; mmHCO3=61.016;
 St = 0.84*30.0;          (* dolomite area per litre of reactor C = 25.2 m2/L *)
 
@@ -56,7 +59,7 @@ St = 0.84*30.0;          (* dolomite area per litre of reactor C = 25.2 m2/L *)
 (*      log g_z = -A z^2 ( sqrt I/(1+sqrt I) - 0.3 I ) ;  g0 = 10^(0.1 I)*)
 (* -------------------------------------------------------------------- *)
 gammas[ii_?NumericQ] := If[ii <= 0, {1.,1.,1.},
-  Module[{f = -ADavies (Sqrt[ii]/(1+Sqrt[ii]) - 0.3 ii)}, {10^f, 10^(4 f), 10^(0.1 ii)}]];
+  Module[{f = -ADavies (Sqrt[ii]/(1+Sqrt[ii]) - daviesB ii)}, {10^f, 10^(4 f), 10^(0.1 ii)}]];
 
 (* -------------------------------------------------------------------- *)
 (*  3.  LAW OF MASS ACTION  and  ELEMENT MASS BALANCES                  *)

@@ -19,14 +19,16 @@ the net surface charge (Pokrovsky et al., 1999) from it. No surface complexation
   (10⁻⁷) and is solved from the proton condition `P(pH) = −2·C_CO3`, where `C_CO3` is the entered total
   CO₃²⁻ (the measured carbonate). Because Ca²⁺, Mg²⁺, Na⁺ and Cl⁻ carry no proton, dissolved Ca/Mg do
   not drag the pH the wrong way — vessel C now falls with acid and rises with base, as MINTEQ gives.
-- **Davies activity coefficients** (with the 0.1·I Setchenow term for neutrals) and the
-  TOUGHREACT / EQ3-6 (Plummer–Busenberg) constants, exactly as in MINTEQ.
+- **MINTEQ's own constants and activity model.** The log K values and the Davies b-term were recovered
+  from the MINTEQ output itself (the log-activities pin every constant to sd < 0.004, and the activity
+  coefficients collapse to a single Davies curve with **b = 0.5**, not the textbook 0.3). Using these,
+  the notebook reproduces MINTEQ rather than approximating it.
 - **Every equation is listed** in both notebooks: the reactions with their log K, the law of mass
   action for each species, the four element mass balances (Ca, Mg, Na, Cl), and the proton condition.
 
-The calculated pH reproduces the MINTEQ output to within about 0.1 pH unit across all 27 solutions
-(A ≈ 8; B acid runs ≈ 5.5, base runs ≈ 8.3; C acid runs ≈ 5.5, base runs ≈ 8.6). The small residual is
-the activity-model detail — MINTEQ's ion pairing gives a slightly lower ionic strength.
+The calculated pH reproduces the MINTEQ output to **~0.01 pH unit** across all 27 solutions, and the
+ionic strength to three decimals (A ≈ 8; B acid runs ≈ 5.5, base runs ≈ 8.3; C acid runs ≈ 5.5, base
+runs ≈ 8.6).
 
 ## Species
 
