@@ -2,14 +2,14 @@
 
 Notebook[{
 Cell["Dolomite in NaCl \[LongDash] Visual MINTEQ speciation (exact match)", "Title"],
-Cell["Reproduces the Visual MINTEQ speciation to ~0.01 pH: fixed pCO2, pH calculated from the mass balance (option 1, H+ started from 1E-7), MINTEQ's own log K constants and its Davies b=0.5 activity model (both recovered from the MINTEQ output), no surface complexation model. Every equation is written out. Mirrors the Python (Colab) notebook, the executed and verified reference. Evaluate the cells in order, then Dataset[Table[speciateRow[dataC[[i]]],{i,9}]] and Dataset[surfaceCharge].", "Text"],
+Cell["Aqueous speciation of the dolomite titration solutions from published TOUGHREACT / EQ3-6 constants (Plummer & Busenberg 1982; Nordstrom et al. 1990; Wolery 1992): fixed pCO2 (open, atmospheric 10^-3.5 atm), pH calculated from the proton mass balance (H+ started from 1E-7), Davies b=0.5 with neutral g0=1, no surface complexation model. The result is compared with a Visual MINTEQ run (comparison only; nothing taken from the software). Every equation is written out. Mirrors the Python (Colab) notebook, the executed and verified reference. Evaluate the cells in order, then Dataset[Table[speciateRow[dataC[[i]]],{i,9}]] and Dataset[surfaceCharge].", "Text"],
 Cell["(* ==================================================================== *)
-(*  Dolomite in NaCl -- Visual MINTEQ-style speciation                  *)
+(*  Dolomite in NaCl -- aqueous speciation from published constants     *)
 (*  (fixed pCO2, pH calculated from the mass balance)                   *)
 (*                                                                      *)
-(*  Reproduces the Visual MINTEQ speciation for the dolomite titration. *)
+(*  Published TOUGHREACT / EQ3-6 constants; compared with Visual MINTEQ.*)
 (*   - Carbonate is OPEN: {CO2(aq)} is fixed (fixed pCO2).              *)
-(*   - pH is CALCULATED from the mass balance (MINTEQ option 1), with   *)
+(*   - pH is CALCULATED from the proton mass balance, with              *)
 (*       the free H+ started from a neutral guess 1E-7.                 *)
 (*   - Davies activity coefficients, TOUGHREACT / EQ3-6 constants.      *)
 (*   - No surface complexation model.                                   *)
@@ -24,43 +24,44 @@ ClearAll[\"Global`*\"];", "Input"],
 Cell["(* -------------------------------------------------------------------- *)
 (*  1.  REACTIONS  (dissociation; complex on the left)  and  log10 K    *)", "Input"],
 Cell["(* -------------------------------------------------------------------- *)
-(*  log K are Visual MINTEQ's own values, recovered from the MINTEQ output. *)
+(*  log K are published TOUGHREACT / EQ3-6 values                        *)
+(*  (Plummer & Busenberg 1982; Nordstrom et al. 1990; Wolery 1992).      *)
 (*  Water / carbonate                                                    *)
-(*    H2O            = H+ + OH-                    logK = -14.011         *)
-(*    CO2(aq) + H2O  = H+ + HCO3-                  logK =  -6.346         *)
-(*    HCO3-          = H+ + CO3^2-                 logK = -10.335         *)
-(*    CO2(g)         = CO2(aq)  -> {CO2(aq)} fixed by pCO2                *)
+(*    H2O            = H+ + OH-                    logK = -13.995         *)
+(*    CO2(aq) + H2O  = H+ + HCO3-                  logK =  -6.345         *)
+(*    HCO3-          = H+ + CO3^2-                 logK = -10.329         *)
+(*    CO2(g)         = CO2(aq)  -> {CO2(aq)} fixed by pCO2 = 10^-3.5      *)
 (*  Complexes                                                            *)
-(*    CaCl+          = Ca2+ + Cl-                  logK =  -0.400         *)
-(*    CaCO3(aq) + H+ = Ca2+ + HCO3-                logK =   6.971         *)
-(*    CaHCO3+        = Ca2+ + HCO3-                logK =  -1.091         *)
-(*    CaOH+  + H+    = Ca2+ + H2O                  logK =  12.711         *)
-(*    MgCl+          = Mg2+ + Cl-                  logK =  -0.600         *)
-(*    MgCO3(aq) + H+ = Mg2+ + HCO3-                logK =   7.355         *)
-(*    MgHCO3+        = Mg2+ + HCO3-                logK =  -1.060         *)
-(*    MgOH+  + H+    = Mg2+ + H2O                  logK =  11.798         *)
-(*    NaCl(aq)       = Na+ + Cl-                   logK =   0.300         *)
-(*    NaCO3- + H+    = Na+ + HCO3-                 logK =   9.065         *)
-(*    NaHCO3(aq)     = Na+ + HCO3-                 logK =   0.306         *)
-(*    NaOH(aq) + H+  = Na+ + H2O                   logK =  13.911         *)", "Input"],
+(*    CaCl+          = Ca2+ + Cl-                  logK =   0.696         *)
+(*    CaCO3(aq) + H+ = Ca2+ + HCO3-                logK =   7.002         *)
+(*    CaHCO3+        = Ca2+ + HCO3-                logK =  -1.047         *)
+(*    CaOH+  + H+    = Ca2+ + H2O                  logK =  12.850         *)
+(*    MgCl+          = Mg2+ + Cl-                  logK =   0.135         *)
+(*    MgCO3(aq) + H+ = Mg2+ + HCO3-                logK =   7.350         *)
+(*    MgHCO3+        = Mg2+ + HCO3-                logK =  -1.036         *)
+(*    MgOH+  + H+    = Mg2+ + H2O                  logK =  11.785         *)
+(*    NaCl(aq)       = Na+ + Cl-                   logK =   0.777         *)
+(*    NaCO3- + H+    = Na+ + HCO3-                 logK =   9.815         *)
+(*    NaHCO3(aq)     = Na+ + HCO3-                 logK =  -0.154         *)
+(*    NaOH(aq) + H+  = Na+ + H2O                   logK =  14.180         *)", "Input"],
 Cell["(* -------------------------------------------------------------------- *)
-(* log K recovered from the Visual MINTEQ output itself (its own database) *)
-lkco2=-6.346; lkco3=10.335; lkoh=14.011;
-lkcacl=-0.400; lkcaco3=6.971; lkcahco3=-1.091; lkcaoh=12.711;
-lkmgcl=-0.600; lkmgco3=7.355; lkmghco3=-1.060; lkmgoh=11.798;
-lknacl=0.300; lknaco3=9.065; lknahco3=0.306; lknaoh=13.911;
+(* published TOUGHREACT / EQ3-6 constants; nothing taken from MINTEQ      *)
+lkco2=-6.345; lkco3=10.329; lkoh=13.995;
+lkcacl=0.696; lkcaco3=7.002; lkcahco3=-1.047; lkcaoh=12.850;
+lkmgcl=0.135; lkmgco3=7.350; lkmghco3=-1.036; lkmgoh=11.785;
+lknacl=0.777; lknaco3=9.815; lknahco3=-0.154; lknaoh=14.180;
 
-aCO2 = 10^-4.90;          (* fixed {CO2(aq)} activity == fixed pCO2 (MINTEQ log activity = -4.9) *)
+aCO2 = 10^-1.469 * 10^-3.5;   (* {CO2(aq)} fixed by atmospheric pCO2=10^-3.5, Henry logKH=-1.469 *)
 ADavies = 0.509;
-daviesB = 0.5;            (* Davies b-term recovered from MINTEQ (its default here, not 0.3) *)
+daviesB = 0.5;            (* Davies salting term *)
 mmCa=40.078; mmMg=24.305; mmNa=22.99; mmCl=35.45; mmCO3=60.008; mmHCO3=61.016;
 St = 0.76*60.0;          (* dolomite area per litre of reactor C = 45.6 m2/L *)", "Input"],
 Cell["(* -------------------------------------------------------------------- *)
 (*  2.  Activity coefficients (Davies)                                  *)
-(*      log g_z = -A z^2 ( sqrt I/(1+sqrt I) - 0.3 I ) ;  g0 = 10^(0.1 I)*)", "Input"],
+(*      log g_z = -A z^2 ( sqrt I/(1+sqrt I) - b I ), b=0.5 ;  g0 = 1    *)", "Input"],
 Cell["(* -------------------------------------------------------------------- *)
 gammas[ii_?NumericQ] := If[ii <= 0, {1.,1.,1.},
-  Module[{f = -ADavies (Sqrt[ii]/(1+Sqrt[ii]) - daviesB ii)}, {10^f, 10^(4 f), 10^(0.1 ii)}]];", "Input"],
+  Module[{f = -ADavies (Sqrt[ii]/(1+Sqrt[ii]) - daviesB ii)}, {10^f, 10^(4 f), 1.}]];", "Input"],
 Cell["(* -------------------------------------------------------------------- *)
 (*  3.  LAW OF MASS ACTION  and  ELEMENT MASS BALANCES                  *)
 (*                                                                      *)
