@@ -39,7 +39,7 @@ MgHCO₃⁺, MgOH⁺; Na⁺, NaCl(aq), NaCO₃⁻, NaHCO₃(aq), NaOH(aq); Cl⁻
 
 At the calculated pH, `σ_T = ( ½(q_A + q_B) − q_C ) / S`, with `q = Σ z_k [k]` over the reactive
 species (Na⁺, Cl⁻ cancel in the difference) and `S` the dolomite area per litre of reactor C
-(0.84 m²/g × 30 g/L = 25.2 m²/L).
+(0.76 m²/g × 60 g/L = 45.6 m²/L).
 
 ## Notes
 

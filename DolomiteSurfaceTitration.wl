@@ -52,7 +52,7 @@ aCO2 = 10^-4.90;          (* fixed {CO2(aq)} activity == fixed pCO2 (MINTEQ log 
 ADavies = 0.509;
 daviesB = 0.5;            (* Davies b-term recovered from MINTEQ (its default here, not 0.3) *)
 mmCa=40.078; mmMg=24.305; mmNa=22.99; mmCl=35.45; mmCO3=60.008; mmHCO3=61.016;
-St = 0.84*30.0;          (* dolomite area per litre of reactor C = 25.2 m2/L *)
+St = 0.76*60.0;          (* dolomite area per litre of reactor C = 45.6 m2/L *)
 
 (* -------------------------------------------------------------------- *)
 (*  2.  Activity coefficients (Davies)                                  *)
