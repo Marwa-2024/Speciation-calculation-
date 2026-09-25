@@ -14,7 +14,6 @@ only.
 | `DolomiteSurfaceTitration.ipynb` | Aqueous speciation with fixed pCO₂ and calculated pH (open system); Visual MINTEQ comparison. |
 | `DolomiteSurfaceTitration.nb` | Mathematica notebook, mirrors the Python; every equation written out. |
 | `DolomiteSurfaceTitration.wl` | The same Mathematica code as a plain package/script. |
-| `DolomiteSCM_prediction.ipynb` | Forward surface complexation model (Pokrovsky 1999) predicting σ_T, for comparison with the measurement. |
 
 ## Measured-pH / alkalinity method (`DolomiteSurfaceCharge.ipynb`)
 
