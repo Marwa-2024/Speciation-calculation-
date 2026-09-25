@@ -42,9 +42,12 @@ MgHCO₃⁺, MgOH⁺; Na⁺, NaCl(aq), NaCO₃⁻, NaHCO₃(aq), NaOH(aq); Cl⁻
 
 ## Surface charge (Pokrovsky Eqn 1)
 
-At the calculated pH, `σ_T = ( ½(q_A + q_B) − q_C ) / S`, with `q = Σ z_k [k]` over the reactive
-species (free Na⁺, Cl⁻ cancel in the difference) and `S` the dolomite area per litre of reactor C
-(0.76 m²/g × 60 g/L = 45.6 m²/L).
+The reference is the conservative A+B mixture speciated as one solution: the A and B analytical totals
+are combined by conserving moles, `C_{j,0} = (C_{j,A} V_A + C_{j,B} V_B) / (V_A + V_B)`, and that mixture
+is speciated at its own calculated pH to give `q₀`. Then `σ_T = ( q₀ − q_C ) / S`, with `q = Σ z_k [k]`
+over the reactive species (free Na⁺, Cl⁻ cancel in the difference) and `S` the dolomite area per litre of
+reactor C (0.76 m²/g × 60 g/L = 45.6 m²/L). Speciating the mixture is preferred over the ½(q_A + q_B)
+average because speciation is nonlinear.
 
 ## Notes
 
