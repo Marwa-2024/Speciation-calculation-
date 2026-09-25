@@ -10,9 +10,19 @@ only.
 
 | File | Purpose |
 |------|---------|
-| `DolomiteSurfaceTitration.ipynb` | Google Colab / Jupyter notebook (Python). The executed, verified reference. |
+| `DolomiteSurfaceCharge.ipynb` | Surface charge for the base runs using **measured pH** and the **measured total alkalinity** constraint, with pH₀ solved for the A+B reference. The main surface-charge deliverable. |
+| `DolomiteSurfaceTitration.ipynb` | Aqueous speciation with fixed pCO₂ and calculated pH (open system); Visual MINTEQ comparison. |
 | `DolomiteSurfaceTitration.nb` | Mathematica notebook, mirrors the Python; every equation written out. |
 | `DolomiteSurfaceTitration.wl` | The same Mathematica code as a plain package/script. |
+| `DolomiteSCM_prediction.ipynb` | Forward surface complexation model (Pokrovsky 1999) predicting σ_T, for comparison with the measurement. |
+
+## Measured-pH / alkalinity method (`DolomiteSurfaceCharge.ipynb`)
+
+For each base run (pH > 7), vessel C uses its **measured pH** and its carbonate is set by the
+**measured total alkalinity** (`P(pH) = −Alk_T`), not by a fixed pCO₂ and not by the separate CO₃/HCO₃
+pair. The A+B reference has no measured pH, so its `pH₀` is solved from the conserved total carbon and
+alkalinity. Constants are published TOUGHREACT / EQ3-6; Davies activity coefficients use b = 0.5. The
+net surface charge is `σ_T = (q₀ − q_C) / S` with `S = 45.6 m²/L`.
 
 ## Method
 
